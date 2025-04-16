@@ -15,12 +15,12 @@ parser.add_argument('-nc', '--num_of_clients', type=int, default=100, help='nume
 parser.add_argument('-cf', '--cfraction', type=float, default=0.1, help='C fraction, 0 means 1 client, 1 means total clients')
 parser.add_argument('-E', '--epoch', type=int, default=5, help='local train epoch')
 parser.add_argument('-B', '--batchsize', type=int, default=10, help='local train batch size')
-parser.add_argument('-mn', '--model_name', type=str, default='mnist_2nn', help='the model to train')
+parser.add_argument('-mn', '--model_name', type=str, default='mnist_cnn', help='the model to train')
 parser.add_argument('-lr', "--learning_rate", type=float, default=0.01, help="learning rate, \
                     use value from origin paper as default")
 parser.add_argument('-vf', "--val_freq", type=int, default=5, help="model validation frequency(of communications)")
 parser.add_argument('-sf', '--save_freq', type=int, default=20, help='global model save frequency(of communication)')
-parser.add_argument('-ncomm', '--num_comm', type=int, default=1000, help='number of communications')
+parser.add_argument('-ncomm', '--num_comm', type=int, default=10, help='number of communications')
 parser.add_argument('-sp', '--save_path', type=str, default='./checkpoints', help='the saving path of checkpoints')
 parser.add_argument('-iid', '--IID', type=int, default=0, help='the way to allocate data to clients')
 
@@ -40,6 +40,9 @@ if __name__=="__main__":
     dev = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     net = None
+    # 2nn 是 MLP，Treats input data as a flat vector，his process loses spatial information – the network doesn't inherently know which input features were originally neighbors in the image,
+    # CNN Explicitly designed to process grid-like data (like images) by preserving spatial relationships.
+    # todo: ？但是 use_pytorch.getData.GetDataSet.mnistDataSetConstruct 里没有根据哪种模型来判断啊，全都转成 flat input 了？
     if args['model_name'] == 'mnist_2nn':
         net = Mnist_2NN()
     elif args['model_name'] == 'mnist_cnn':
