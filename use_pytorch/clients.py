@@ -151,6 +151,11 @@ class ClientsGroup(object):
         client_count = 0
         # Use the same shard allocation logic as before
         mnistDataSet = GetDataSet(self.data_set_name, self.is_iid)
+
+        test_data = torch.tensor(mnistDataSet.test_data)
+        test_label = torch.argmax(torch.tensor(mnistDataSet.test_label), dim=1)
+        self.test_data_loader = DataLoader(TensorDataset(test_data, test_label), batch_size=100, shuffle=False)
+
         train_data = mnistDataSet.train_data
         train_label = mnistDataSet.train_label
         shard_size = max(1, mnistDataSet.train_data_size // self.num_of_clients // 2)
