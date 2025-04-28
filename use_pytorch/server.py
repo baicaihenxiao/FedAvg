@@ -5,6 +5,9 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import optim
+import json
+import time
+import matplotlib.pyplot as plt
 from Models import Mnist_2NN, Mnist_CNN
 from clients import ClientsGroup, client
 
@@ -65,6 +68,11 @@ if __name__=="__main__":
     for key, var in net.state_dict().items():
         global_parameters[key] = var.clone()
 
+    # --- Initialize Log List ---
+    accuracy_log = []
+    # --- Variable to store the latest accuracy ---
+    last_recorded_accuracy = 0.0
+
     for i in range(args['num_comm']):
         print("communicate round {}".format(i+1))
 
@@ -97,7 +105,13 @@ if __name__=="__main__":
                     preds = torch.argmax(preds, dim=1)
                     sum_accu += (preds == label).float().mean()
                     num += 1
-                print('accuracy: {}'.format(sum_accu / num))
+
+                if num > 0:
+                    current_accuracy = (sum_accu / num).item()
+                    # --- Update the last recorded accuracy ---
+                    last_recorded_accuracy = current_accuracy
+                    print('Round {} | accuracy: {:.4f}'.format(i + 1, current_accuracy))
+                    accuracy_log.append({'round': i + 1, 'accuracy': current_accuracy})
 
         if (i + 1) % args['save_freq'] == 0:
             torch.save(net, os.path.join(args['save_path'],
@@ -107,4 +121,44 @@ if __name__=="__main__":
                                                                                                 args['learning_rate'],
                                                                                                 args['num_of_clients'],
                                                                                                 args['cfraction'])))
+
+
+    finish_time = time.strftime('%Y-%m-%d-%H%M%S')
+
+    # --- Construct final JSON filename using the LAST recorded accuracy ---
+    final_acc_str = "{:.4f}".format(last_recorded_accuracy).replace('.', '_') # Format accuracy for filename
+    save_filename = 'master_{}_acc{}_{}_num_comm{}_E{}_B{}_lr{}_num_clients{}_cf{}'.format(
+        finish_time, final_acc_str, args['model_name'], args['num_comm'], args['epoch'], args['batchsize'],
+        args['learning_rate'], args['num_of_clients'], args['cfraction'],
+    )
+
+    # --- Save Log to JSON File ---
+    log_filepath_final = os.path.join(args['save_path'], save_filename + '.json')
+    print(f"Saving final accuracy log to: {log_filepath_final}")
+    try:
+        with open(log_filepath_final, 'w') as f:
+            json.dump(accuracy_log, f, indent=4)
+        print(f"Accuracy log saved successfully.")
+    except Exception as e:
+        print(f"Error saving accuracy log to {log_filepath_final}: {e}")
+
+    # save final model
+    torch.save(net, os.path.join(args['save_path'], save_filename + '.pth'))
+    print(f"Checkpoint saved: {save_filename}.pth")
+
+    # plot rounds and accuracies
+    rounds = [d['round'] for d in accuracy_log]
+    accuracies = [d['accuracy'] for d in accuracy_log]
+
+    # Plot
+    plt.plot(rounds, accuracies, marker='o')
+    plt.xlabel('Round')
+    plt.ylabel('Accuracy')
+    plt.title('Accuracy over Rounds')
+    plt.grid(True)
+    plt.savefig(os.path.join(args['save_path'], save_filename + '.png'))
+    plt.show()
+
+
+    print("Federated training finished.")
 
