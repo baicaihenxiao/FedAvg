@@ -8,6 +8,8 @@ import torch.nn.functional as F
 from torch import optim
 import json
 import time
+import matplotlib.pyplot as plt
+
 
 
 
@@ -24,9 +26,9 @@ parser.add_argument('-B', '--batchsize', type=int, default=10, help='local train
 parser.add_argument('-mn', '--model_name', type=str, default='mnist_cnn', help='the model to train') # Default to CNN
 parser.add_argument('-lr', "--learning_rate", type=float, default=0.01, help="learning rate for server update")
 parser.add_argument('-cr', '--compress_ratio', type=float, default=0.01, help='Top-k compression ratio (0 to 1)') # Added
-parser.add_argument('-vf', "--val_freq", type=int, default=5, help="model validation frequency(of communications)")
+parser.add_argument('-vf', "--val_freq", type=int, default=1, help="model validation frequency(of communications)")
 parser.add_argument('-sf', '--save_freq', type=int, default=20, help='global model save frequency(of communication)')
-parser.add_argument('-ncomm', '--num_comm', type=int, default=20, help='number of communications')
+parser.add_argument('-ncomm', '--num_comm', type=int, default=100, help='number of communications')
 parser.add_argument('-sp', '--save_path', type=str, default='./checkpoints', help='the saving path of checkpoints')
 parser.add_argument('-iid', '--IID', type=int, default=0, help='the way to allocate data to clients')
 
@@ -233,6 +235,20 @@ if __name__=="__main__":
     # save final model
     torch.save(net, os.path.join(args['save_path'], save_filename + '.pth'))
     print(f"Checkpoint saved: {save_filename}.pth")
+
+    # plot rounds and accuracies
+    rounds = [d['round'] for d in accuracy_log]
+    accuracies = [d['accuracy'] for d in accuracy_log]
+
+    # Plot
+    plt.plot(rounds, accuracies, marker='o')
+    plt.xlabel('Round')
+    plt.ylabel('Accuracy')
+    plt.title('Accuracy over Rounds')
+    plt.grid(True)
+    plt.savefig(os.path.join(args['save_path'], save_filename + '.png'))
+    plt.show()
+
 
 
 
