@@ -7,6 +7,10 @@ import torch
 import torch.nn.functional as F
 from torch import optim
 import copy # Import copy
+import json
+import time
+import matplotlib.pyplot as plt
+
 # Assuming Models.py and modified clients.py are available
 from Models import Mnist_2NN, Mnist_CNN
 from clients import ClientsGroup # Use modified ClientsGroup
@@ -24,7 +28,7 @@ parser.add_argument('-mn', '--model_name', type=str, default='mnist_cnn', help='
 parser.add_argument('-lr', "--learning_rate", type=float, default=0.01, help="LOCAL learning rate for clients") # Note: Server doesn't use LR directly for update
 parser.add_argument('-cr', '--compress_ratio', type=float, default=0.01, help='Top-k compression ratio (0 to 1)')
 parser.add_argument('-vf', "--val_freq", type=int, default=1, help="model validation frequency(of communications)")
-parser.add_argument('-sf', '--save_freq', type=int, default=20, help='global model save frequency(of communication)')
+parser.add_argument('-sf', '--save_freq', type=int, default=100, help='global model save frequency(of communication)')
 parser.add_argument('-ncomm', '--num_comm', type=int, default=100, help='number of communications')
 parser.add_argument('-sp', '--save_path', type=str, default='./checkpoints', help='the saving path of checkpoints')
 parser.add_argument('-iid', '--IID', type=int, default=0, help='the way to allocate data to clients')
@@ -83,6 +87,11 @@ if __name__=="__main__":
     global_parameters = {}
     for key, var in net.state_dict().items():
         global_parameters[key] = var.clone()
+
+    # --- Initialize Log List ---
+    accuracy_log = []
+    # --- Variable to store the latest accuracy ---
+    last_recorded_accuracy = 0.0
 
     # --- Modified Communication Loop ---
     for i in range(args['num_comm']):
@@ -169,10 +178,13 @@ if __name__=="__main__":
                      preds = torch.argmax(preds, dim=1)
                      sum_accu += (preds == label).float().mean()
                      num += 1
+
                  if num > 0:
-                     print('accuracy: {:.4f}'.format(sum_accu / num))
-                 else:
-                      print("No data in test loader.")
+                     current_accuracy = (sum_accu / num).item()
+                     # --- Update the last recorded accuracy ---
+                     last_recorded_accuracy = current_accuracy
+                     print('Round {} | accuracy: {:.4f}'.format(i + 1, current_accuracy))
+                     accuracy_log.append({'round': i + 1, 'accuracy': current_accuracy})
              # net.train() # Optional: Set back to train mode
 
         # --- Saving Checkpoints (remains the same, filename reflects compression) ---
@@ -185,4 +197,47 @@ if __name__=="__main__":
              torch.save(net, os.path.join(args['save_path'], save_filename + '.pth'))
              print(f"Checkpoint saved: {save_filename}.pth")
 
+
+
+
+
+
+    finish_time = time.strftime('%Y-%m-%d-%H%M%S')
+
+    # --- Construct final JSON filename using the LAST recorded accuracy ---
+    final_acc_str = "{:.4f}".format(last_recorded_accuracy).replace('.', '_') # Format accuracy for filename
+    save_filename = '{}_acc{}_{}_num_comm{}_E{}_B{}_lr{}_num_clients{}_cf{}_cr{}'.format(
+        finish_time, final_acc_str, args['model_name'], args['num_comm'], args['epoch'], args['batchsize'],
+        args['learning_rate'], actual_num_clients, args['cfraction'],
+        args['compress_ratio']  # Add compression ratio to filename
+    )
+
+    # --- Save Log to JSON File ---
+    log_filepath_final = os.path.join(args['save_path'], save_filename + '.json')
+    print(f"Saving final accuracy log to: {log_filepath_final}")
+    try:
+        with open(log_filepath_final, 'w') as f:
+            json.dump(accuracy_log, f, indent=4)
+        print(f"Accuracy log saved successfully.")
+    except Exception as e:
+        print(f"Error saving accuracy log to {log_filepath_final}: {e}")
+
+    # save final model
+    torch.save(net, os.path.join(args['save_path'], save_filename + '.pth'))
+    print(f"Checkpoint saved: {save_filename}.pth")
+
+    # plot rounds and accuracies
+    rounds = [d['round'] for d in accuracy_log]
+    accuracies = [d['accuracy'] for d in accuracy_log]
+
+    # Plot
+    plt.plot(rounds, accuracies, marker='o')
+    plt.xlabel('Round')
+    plt.ylabel('Accuracy')
+    plt.title('Accuracy over Rounds')
+    plt.grid(True)
+    plt.savefig(os.path.join(args['save_path'], save_filename + '.png'))
+    plt.show()
+
     print("Federated training (Top-K Delta) finished.")
+
